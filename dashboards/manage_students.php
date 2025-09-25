@@ -11,41 +11,27 @@ $dbpassword = "";
 $dbname = "huduma";
 $conn = new mysqli($servername, $dbusername, $dbpassword, $dbname);
 
-// Approve or reject an application
-if (isset($_GET['action']) && isset($_GET['id'])) {
-    $id = intval($_GET['id']);
-    $action = $_GET['action'];
-    if (in_array($action, ['approved','rejected'])) {
-        $sql = "UPDATE application SET status=? WHERE id=?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("si", $action, $id);
-        $stmt->execute();
-    }
+// Handle delete student
+if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
+    $id = intval($_GET['delete']);
+    $sql = "DELETE FROM admin WHERE id=? AND role='student'";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
 }
 
 // Handle search filter
 $search = "";
-$whereClause = "WHERE u.role='student'"; 
-
 if (isset($_GET['search']) && !empty(trim($_GET['search']))) {
     $search = trim($_GET['search']);
     $searchLike = "%$search%";
-    $whereClause .= " AND (u.username LIKE ? OR a.school_name LIKE ? OR a.status LIKE ?)";
-    $sql = "SELECT a.id, u.username, a.school_name, a.status, a.id AS app_id
-            FROM application a
-            JOIN admin u ON a.student_id=u.id
-            $whereClause
-            ORDER BY a.id DESC";
+    $sql = "SELECT id, username FROM admin WHERE role='student' AND username LIKE ? ORDER BY id DESC";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sss", $searchLike, $searchLike, $searchLike);
+    $stmt->bind_param("s", $searchLike);
     $stmt->execute();
     $result = $stmt->get_result();
 } else {
-    $sql = "SELECT a.id, u.username, a.school_name, a.status, a.id AS app_id
-            FROM application a
-            JOIN admin u ON a.student_id=u.id
-            $whereClause
-            ORDER BY a.id DESC";
+    $sql = "SELECT id, username FROM admin WHERE role='student' ORDER BY id DESC";
     $result = $conn->query($sql);
 }
 ?>
@@ -53,7 +39,7 @@ if (isset($_GET['search']) && !empty(trim($_GET['search']))) {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Admin Dashboard</title>
+    <title>Manage Students</title>
     <style>
         body { 
             margin: 0; 
@@ -109,8 +95,7 @@ if (isset($_GET['search']) && !empty(trim($_GET['search']))) {
             text-decoration: none; 
             border-radius: 4px; 
         }
-        .approve { background: green; color: white; }
-        .reject { background: red; color: white; }
+        .delete { background: red; color: white; }
         h2 { margin-bottom: 10px; }
         .search-box { margin-bottom: 15px; }
         .search-box input[type="text"] { padding: 8px; width: 250px; }
@@ -125,48 +110,39 @@ if (isset($_GET['search']) && !empty(trim($_GET['search']))) {
         <a href="admin_dashboard.php">Dashboard</a>
         <a href="manage_students.php">Manage Students</a>
         <a href="reports.php">Reports</a>
-        <a href="settings.php">Settings</a>
-        <a class="logout" href="logout.php">Logout</a>
+        <a href="#">Settings</a>
+        <a class="logout" href="../logout.php">Logout</a>
     </div>
 
     <!-- Main Content -->
     <div class="content">
-        <h2>Application History</h2>
+        <h2>Manage Students</h2>
 
         <!-- Search box -->
         <form method="GET" class="search-box">
-            <input type="text" name="search" placeholder="Search by student, school, or status" value="<?php echo htmlspecialchars($search); ?>">
+            <input type="text" name="search" placeholder="Search by username" value="<?php echo htmlspecialchars($search); ?>">
             <button type="submit">Search</button>
-            <a href="admin_dashboard.php" style="padding:8px 12px; background:#555; color:white; text-decoration:none; border-radius:4px;">Reset</a>
+            <a href="manage_students.php" style="padding:8px 12px; background:#555; color:white; text-decoration:none; border-radius:4px;">Reset</a>
         </form>
 
         <table>
             <tr>
-                <th>Application ID</th>
-                <th>Student</th>
-                <th>School</th>
-                <th>Status</th>
+                <th>ID</th>
+                <th>Student Username</th>
                 <th>Action</th>
             </tr>
             <?php if ($result && $result->num_rows > 0): ?>
                 <?php while($row = $result->fetch_assoc()): ?>
                 <tr>
-                    <td><?php echo $row['app_id']; ?></td>
+                    <td><?php echo $row['id']; ?></td>
                     <td><?php echo $row['username']; ?></td>
-                    <td><?php echo $row['school_name']; ?></td>
-                    <td><?php echo ucfirst($row['status']); ?></td>
                     <td>
-                        <?php if ($row['status'] === 'pending'): ?>
-                            <a class="action approve" href="?action=approved&id=<?php echo $row['id']; ?>">Approve</a>
-                            <a class="action reject" href="?action=rejected&id=<?php echo $row['id']; ?>">Reject</a>
-                        <?php else: ?>
-                            <span style="color:gray;">No action</span>
-                        <?php endif; ?>
+                        <a class="action delete" href="?delete=<?php echo $row['id']; ?>" onclick="return confirm('Are you sure you want to delete this student?');">Delete</a>
                     </td>
                 </tr>
                 <?php endwhile; ?>
             <?php else: ?>
-                <tr><td colspan="5">No applications found.</td></tr>
+                <tr><td colspan="3">No students found.</td></tr>
             <?php endif; ?>
         </table>
     </div>
