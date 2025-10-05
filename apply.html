@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>School Application Form</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h2>School Application Form</h2>
+    <form id="applicationForm" action="submit_application.php" method="POST">
+      <label>Full Name:</label>
+      <input type="text" name="full_name" required>
+
+      <label>Index Number:</label>
+      <input type="text" name="index_number" required>
+
+      <label>Marks:</label>
+      <input type="number" name="marks" required>
+
+      <button type="submit">Submit Application</button>
+    </form>
+  </div>
+</body>
+</html>

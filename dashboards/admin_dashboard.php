@@ -1,4 +1,4 @@
-<?php 
+<?php
 session_start();
 if (!isset($_SESSION['username']) || $_SESSION['role'] !== 'admin') {
     header("Location: ../login.html");
@@ -11,43 +11,24 @@ $dbpassword = "";
 $dbname = "huduma";
 $conn = new mysqli($servername, $dbusername, $dbpassword, $dbname);
 
-// Approve or reject an application
-if (isset($_GET['action']) && isset($_GET['id'])) {
-    $id = intval($_GET['id']);
-    $action = $_GET['action'];
-    if (in_array($action, ['approved','rejected'])) {
-        $sql = "UPDATE application SET status=? WHERE id=?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("si", $action, $id);
-        $stmt->execute();
+$message = "";
+
+// Handle approval or rejection
+if (isset($_POST['action']) && isset($_POST['app_id'])) {
+    $app_id = intval($_POST['app_id']);
+    $action = $_POST['action'] === 'approve' ? 'accepted' : 'rejected';
+
+    $stmt = $conn->prepare("UPDATE applications SET status=? WHERE id=?");
+    $stmt->bind_param("si", $action, $app_id);
+
+    if ($stmt->execute()) {
+        $message = "<p style='color:green;'>Application $action successfully!</p>";
+    } else {
+        $message = "<p style='color:red;'>Error updating status.</p>";
     }
 }
 
-// Handle search filter
-$search = "";
-$whereClause = "WHERE u.role='student'"; 
-
-if (isset($_GET['search']) && !empty(trim($_GET['search']))) {
-    $search = trim($_GET['search']);
-    $searchLike = "%$search%";
-    $whereClause .= " AND (u.username LIKE ? OR a.school_name LIKE ? OR a.status LIKE ?)";
-    $sql = "SELECT a.id, u.username, a.school_name, a.status, a.id AS app_id
-            FROM application a
-            JOIN admin u ON a.student_id=u.id
-            $whereClause
-            ORDER BY a.id DESC";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sss", $searchLike, $searchLike, $searchLike);
-    $stmt->execute();
-    $result = $stmt->get_result();
-} else {
-    $sql = "SELECT a.id, u.username, a.school_name, a.status, a.id AS app_id
-            FROM application a
-            JOIN admin u ON a.student_id=u.id
-            $whereClause
-            ORDER BY a.id DESC";
-    $result = $conn->query($sql);
-}
+$result = $conn->query("SELECT * FROM applications ORDER BY id DESC");
 ?>
 
 <!DOCTYPE html>
@@ -55,120 +36,68 @@ if (isset($_GET['search']) && !empty(trim($_GET['search']))) {
 <head>
     <title>Admin Dashboard</title>
     <style>
-        body { 
-            margin: 0; 
-            font-family: Arial, sans-serif; 
-            background: #f4f4f4;
-        }
+        body { margin:0; font-family:Arial, sans-serif; background:#f8f8f8; }
         .sidebar {
-            height: 100vh;
-            width: 220px;
-            position: fixed;
-            top: 0;
-            left: 0;
-            background: #333;
-            color: white;
-            padding-top: 20px;
+            width:200px; height:100vh; background:#222; color:white; position:fixed; top:0; left:0; padding-top:20px;
         }
-        .sidebar h2 {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .sidebar a {
-            display: block;
-            color: white;
-            padding: 12px;
-            text-decoration: none;
-        }
-        .sidebar a:hover {
-            background: #575757;
-        }
-        .logout {
-            background: red;
-            text-align: center;
-            margin-top: 20px;
-            border-radius: 5px;
-        }
-        .content {
-            margin-left: 240px;
-            padding: 20px;
-        }
-        table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            background: white; 
-            margin-top: 15px; 
-        }
-        th, td { 
-            padding: 10px; 
-            border: 1px solid #ddd; 
-            text-align: center; 
-        }
-        a.action { 
-            padding: 5px 10px; 
-            text-decoration: none; 
-            border-radius: 4px; 
-        }
-        .approve { background: green; color: white; }
-        .reject { background: red; color: white; }
-        h2 { margin-bottom: 10px; }
-        .search-box { margin-bottom: 15px; }
-        .search-box input[type="text"] { padding: 8px; width: 250px; }
-        .search-box button { padding: 8px 12px; }
+        .sidebar h2 { text-align:center; margin-bottom:20px; }
+        .sidebar a { display:block; color:white; padding:10px; text-decoration:none; }
+        .sidebar a:hover { background:#444; }
+        .content { margin-left:220px; padding:20px; }
+        table { width:100%; border-collapse:collapse; background:white; margin-top:15px; }
+        th, td { border:1px solid #ddd; padding:10px; text-align:center; }
+        form { display:inline; }
+        button { padding:6px 10px; border:none; border-radius:4px; color:white; cursor:pointer; }
+        .approve { background:green; }
+        .reject { background:red; }
+        .approve:hover { background:#006400; }
+        .reject:hover { background:#b30000; }
     </style>
 </head>
 <body>
 
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <h2>Admin Panel</h2>
-        <a href="admin_dashboard.php">Dashboard</a>
-        <a href="manage_students.php">Manage Students</a>
-        <a href="reports.php">Reports</a>
-        <a href="settings.php">Settings</a>
-        <a class="logout" href="logout.php">Logout</a>
-    </div>
+<div class="sidebar">
+    <h2>Admin Panel</h2>
+    <a href="admin_dashboard.php">Dashboard</a>
+    <a href="../index.html">Logout</a>
+</div>
 
-    <!-- Main Content -->
-    <div class="content">
-        <h2>Application History</h2>
+<div class="content">
+    <h2>Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?>!</h2>
+    <?php echo $message; ?>
 
-        <!-- Search box -->
-        <form method="GET" class="search-box">
-            <input type="text" name="search" placeholder="Search by student, school, or status" value="<?php echo htmlspecialchars($search); ?>">
-            <button type="submit">Search</button>
-            <a href="admin_dashboard.php" style="padding:8px 12px; background:#555; color:white; text-decoration:none; border-radius:4px;">Reset</a>
-        </form>
+    <h3>Pending Applications</h3>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Full Name</th>
+            <th>Index Number</th>
+            <th>Marks</th>
+            <th>Status</th>
+            <th>Action</th>
+        </tr>
+        <?php while ($row = $result->fetch_assoc()): ?>
+        <tr>
+            <td><?= $row['id'] ?></td>
+            <td><?= htmlspecialchars($row['full_name']) ?></td>
+            <td><?= htmlspecialchars($row['index_number']) ?></td>
+            <td><?= $row['marks'] ?></td>
+            <td><?= ucfirst($row['status']) ?></td>
+            <td>
+                <?php if ($row['status'] == 'pending'): ?>
+                    <form method="POST">
+                        <input type="hidden" name="app_id" value="<?= $row['id'] ?>">
+                        <button type="submit" name="action" value="approve" class="approve">Accept</button>
+                        <button type="submit" name="action" value="reject" class="reject">Reject</button>
+                    </form>
+                <?php else: ?>
+                    <em>No action</em>
+                <?php endif; ?>
+            </td>
+        </tr>
+        <?php endwhile; ?>
+    </table>
+</div>
 
-        <table>
-            <tr>
-                <th>Application ID</th>
-                <th>Student</th>
-                <th>School</th>
-                <th>Status</th>
-                <th>Action</th>
-            </tr>
-            <?php if ($result && $result->num_rows > 0): ?>
-                <?php while($row = $result->fetch_assoc()): ?>
-                <tr>
-                    <td><?php echo $row['app_id']; ?></td>
-                    <td><?php echo $row['username']; ?></td>
-                    <td><?php echo $row['school_name']; ?></td>
-                    <td><?php echo ucfirst($row['status']); ?></td>
-                    <td>
-                        <?php if ($row['status'] === 'pending'): ?>
-                            <a class="action approve" href="?action=approved&id=<?php echo $row['id']; ?>">Approve</a>
-                            <a class="action reject" href="?action=rejected&id=<?php echo $row['id']; ?>">Reject</a>
-                        <?php else: ?>
-                            <span style="color:gray;">No action</span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <?php endwhile; ?>
-            <?php else: ?>
-                <tr><td colspan="5">No applications found.</td></tr>
-            <?php endif; ?>
-        </table>
-    </div>
 </body>
 </html>

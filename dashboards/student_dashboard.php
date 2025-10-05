@@ -13,47 +13,38 @@ $conn = new mysqli($servername, $dbusername, $dbpassword, $dbname);
 
 $username = $_SESSION['username'];
 
-// Get student ID
+// Get student ID from the admin table
 $sql = "SELECT id FROM admin WHERE username=?";
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("s", $username);
 $stmt->execute();
 $result = $stmt->get_result();
 $student = $result->fetch_assoc();
-$student_id = $student['id'];
+$student_id = $student['id'] ?? null;
 
-// Get application history
-$sql = "SELECT id, school_name, status FROM application WHERE student_id=? ORDER BY id DESC";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $student_id);
-$stmt->execute();
-$applications = $stmt->get_result();
-
-// Latest status
-$latest_status = "No application yet.";
-if ($applications->num_rows > 0) {
-    $row = $applications->fetch_assoc();
-    $latest_status = $row['status'];
-}
+$message = "";
+$passMessage = "";
 
 // Handle new application submission
-$message = "";
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['apply'])) {
-    if ($latest_status === "pending" || $latest_status === "approved") {
-        $message = "<p style='color:red;'>You cannot apply again while your application is $latest_status.</p>";
+    $full_name = trim($_POST['full_name']);
+    $index_number = trim($_POST['index_number']);
+    $marks = intval($_POST['marks']);
+
+    if (!empty($full_name) && !empty($index_number) && $marks > 0) {
+        $stmt = $conn->prepare("INSERT INTO applications (full_name, index_number, marks) VALUES (?, ?, ?)");
+        $stmt->bind_param("ssi", $full_name, $index_number, $marks);
+        if ($stmt->execute()) {
+            $message = "<p style='color:green;'>Application submitted successfully!</p>";
+        } else {
+            $message = "<p style='color:red;'>Error submitting application.</p>";
+        }
     } else {
-        $sql = "INSERT INTO application (student_id) VALUES (?)";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("i", $student_id);
-        $stmt->execute();
-        $message = "<p style='color:green;'>Application submitted successfully!</p>";
-        header("Location: student_dashboard.php");
-        exit();
+        $message = "<p style='color:red;'>All fields are required.</p>";
     }
 }
 
 // Handle password change
-$passMessage = "";
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['change_password'])) {
     $new_password = trim($_POST['new_password']);
     if (!empty($new_password)) {
@@ -70,6 +61,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['change_password'])) {
         $passMessage = "<p style='color:red;'>Password cannot be empty.</p>";
     }
 }
+
+// Fetch all applications (for history)
+$result = $conn->query("SELECT * FROM applications ORDER BY id DESC");
 ?>
 
 <!DOCTYPE html>
@@ -87,14 +81,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['change_password'])) {
         }
         .sidebar a:hover { background:#575757; }
         .content { margin-left:220px; padding:20px; }
-        .message { margin:10px 0; }
         table { width:100%; border-collapse:collapse; margin-top:15px; background:white; }
         th, td { padding:10px; border:1px solid #ddd; text-align:center; }
-        button { padding:10px 15px; background:blue; color:white; border:none; cursor:pointer; border-radius:4px; }
-        form { margin-top:20px; background:white; padding:15px; border-radius:8px; width:350px; }
-        input[type="password"] {
+        form { margin-top:20px; background:white; padding:15px; border-radius:8px; width:400px; }
+        input[type="text"], input[type="number"], input[type="password"] {
             width:100%; padding:8px; margin-bottom:10px; border:1px solid #ddd; border-radius:4px;
         }
+        button {
+            padding:10px 15px; background:blue; color:white; border:none; cursor:pointer; border-radius:4px;
+        }
+        button:hover { background:#0056b3; }
     </style>
 </head>
 <body>
@@ -102,45 +98,58 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['change_password'])) {
 <div class="sidebar">
     <h2>Student Panel</h2>
     <a href="student_dashboard.php">Dashboard</a>
-    <a href="#">Register</a>
-    <a href="logout.php">Logout</a>
+    <a href="../check_status.php">Check Status</a>
+    <a href="../index.html">Logout</a>
 </div>
 
 <div class="content">
     <h2>Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?>!</h2>
-    <p><strong>Latest Application Status:</strong> <?php echo ucfirst($latest_status); ?></p>
 
     <?php echo $message; ?>
 
-    <?php if ($latest_status === "No application yet." || $latest_status === "rejected") { ?>
-        <form method="post">
-            <button type="submit" name="apply">Apply Now</button>
-        </form>
-    <?php } ?>
+    <!-- Application Form -->
+    <h3>Submit Application</h3>
+    <form method="POST">
+        <label>Full Name:</label>
+        <input type="text" name="full_name" required>
 
+        <label>Index Number:</label>
+        <input type="text" name="index_number" required>
+
+        <label>Marks:</label>
+        <input type="number" name="marks" required>
+
+        <button type="submit" name="apply">Submit Application</button>
+    </form>
+
+    <!-- Application History -->
     <h3>Your Application History</h3>
     <table>
         <tr>
-            <th>Application ID</th>
-            <th>School</th>
+            <th>ID</th>
+            <th>Full Name</th>
+            <th>Index Number</th>
+            <th>Marks</th>
             <th>Status</th>
         </tr>
         <?php
-        $applications->data_seek(0);
-        if ($applications->num_rows > 0) {
-            while($row = $applications->fetch_assoc()) {
+        if ($result->num_rows > 0) {
+            while($row = $result->fetch_assoc()) {
                 echo "<tr>
                         <td>{$row['id']}</td>
-                        <td>{$row['school_name']}</td>
+                        <td>{$row['full_name']}</td>
+                        <td>{$row['index_number']}</td>
+                        <td>{$row['marks']}</td>
                         <td>".ucfirst($row['status'])."</td>
                     </tr>";
             }
         } else {
-            echo "<tr><td colspan='3'>No applications yet.</td></tr>";
+            echo "<tr><td colspan='5'>No applications yet.</td></tr>";
         }
         ?>
     </table>
 
+    <!-- Password Update -->
     <h3>Change Password</h3>
     <?php echo $passMessage; ?>
     <form method="post">
