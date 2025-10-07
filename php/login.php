@@ -30,7 +30,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $_SESSION['role'] = $row['role'];
 
             if ($row['role'] === 'admin') {
-                header("Location: ../dashboards/admin_dashboard.php");
+                header("Location: ../dashboards/admin_home.php");
             } else {
                 header("Location: ../dashboards/student_dashboard.php");
             }
